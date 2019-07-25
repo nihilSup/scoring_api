@@ -36,8 +36,26 @@ GENDERS = {
 }
 
 
-class CharField(object):
-    pass
+class BaseField(object):
+    def __init__(self, required, nullable):
+        self.required = required
+        self.nullable = nullable
+
+
+class CharField(BaseField):
+    # TODO: how to get string class name?
+    __store_name = "CharField_value"
+    
+    def __get__(self, instance, val, cls):
+        if not instance:
+            pass
+    
+    def __set__(self, obj, val):
+        try:
+            val = str(val)
+        except Exception as e:
+            raise ValueError("Can't convert to string")
+        obj.__dict__[self.__class__.__store_name]
 
 
 class ArgumentsField(object):
@@ -89,6 +107,20 @@ class MethodRequest(object):
     arguments = ArgumentsField(required=True, nullable=True)
     method = CharField(required=True, nullable=False)
 
+    def __init__(self, account, login, token, arguments, method):
+        self.account = account
+        self.login = login
+        self.token = token
+        self.arguments = arguments
+        self.method = method
+        
+        # TODO: ugly check, can't tell which arguments are invalid. Fix it.
+        if not all(field.is_valid for field in 
+                   [self.account, self.login, self.token, self.arguments, self.method]):
+            # TODO: is it suitable exception type?
+            raise AttributeError("Some fields are invalid")
+
+
     @property
     def is_admin(self):
         return self.login == ADMIN_LOGIN
@@ -134,7 +166,7 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
             if path in self.router:
                 try:
                     response, code = self.router[path]({"body": request, "headers": self.headers}, context, self.store)
-                except Exception, e:
+                except Exception as e:
                     logging.exception("Unexpected error: %s" % e)
                     code = INTERNAL_ERROR
             else:
