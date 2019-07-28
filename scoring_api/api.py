@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
-
 import abc
 import json
 import datetime
@@ -8,7 +5,8 @@ import logging
 import hashlib
 import uuid
 from optparse import OptionParser
-from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from dateutil.relativedelta import relativedelta
 
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
@@ -36,67 +34,168 @@ GENDERS = {
 }
 
 
-class BaseField(object):
-    def __init__(self, required, nullable):
+class TypedField(object):
+    __count = 0
+
+    def __init__(self, type_, default=None, name=None):
+        self.type = type_
+        self.default = default
+        cls = self.__class__
+        if not name:
+            name = '_{}_{}_#{}'.format(self.cls.__name__, type_.__name__,
+                                       cls.__count)
+        self.name = name
+        cls.__count += 1
+
+    def __get__(self, obj, owner):
+        if not obj:
+            return self
+        return getattr(obj, self.name, self.default)
+
+    def __set__(self, obj, val):
+        if any(map(lambda t: isinstance(val, t), self.type)):
+            setattr(obj, self.name, val)
+        else:
+            raise TypeError('value must be instance of any of {}'
+                            .format(str(self.type)))
+
+    def __set_name__(self, owner, name):
+        self.name = name
+
+
+class NamedDescrMeta(type):
+    def __init__(cls, name, bases, attrs):
+        super().__init__(name, bases, attrs)
+        for attr_name, attr_val in attrs:
+            if isinstance(attr_val, TypedField):
+                attr_val.__set_name__(cls, attr_name)
+
+
+class BaseField(TypedField):
+    def __init__(self, required, nullable, validators=None, *args, **kwargs):
         self.required = required
         self.nullable = nullable
+        if not validators:
+            self.validators = []
+        self.val_set_flag = False
+        super().__init__(*args, **kwargs)
+
+    def __set__(self, obj, val):
+        if not self.nullable and val is None:
+            raise ValueError("Value is required, can't be None")
+        for validator in self.validators:
+            validator(val)
+        self.val_set_flag = True
+        super().__set__(obj, val)
+
+    def __get__(self, obj, owner):
+        if self.required and not self.val_set_flag:
+            raise ValueError("Value has been not set, but it is required")
+        return super().__get__(obj, owner)
+
+
+def has_length(length):
+    def valdiate_length(val):
+        cur_length = len(str(val))
+        if cur_length != length:
+            raise ValueError('Incorrect length. Expected {}, but got {}'
+                             .format(length, cur_length))
+    return valdiate_length
+
+
+def starts_with(char):
+    def validate_prefix(val):
+        first = str(val)[0]
+        if first != char:
+            raise ValueError('Incorrect prefix. Expected {}, but got {}'
+                             .format(char, first))
+    return validate_prefix
+
+
+def check_if_email(val):
+    if '@' not in val:
+        raise ValueError('There is no @ in email field')
+
+
+def is_date(fmt):
+    def valdiate_date(val):
+        datetime.datetime.strptime(val, fmt)
+    return valdiate_date
+
+
+def is_age_le(years, fmt):
+    def validate_age(val):
+        bday = datetime.datetime.strptime(val, fmt)
+        now = datetime.datetime.now()
+        if relativedelta(now, bday).years > years:
+            raise ValueError('Age is bigger then {}'.format(years))
+    return validate_age
+
+
+def int_in_range(range_):
+    def validate_int_in_range(val):
+        if val not in range_:
+            raise ValueError('Value: {} not in range'.format(val))
+    return validate_int_in_range
 
 
 class CharField(BaseField):
-    # TODO: how to get string class name?
-    __store_name = "CharField_value"
-    
-    def __get__(self, instance, val, cls):
-        if not instance:
-            pass
-    
-    def __set__(self, obj, val):
-        try:
-            val = str(val)
-        except Exception as e:
-            raise ValueError("Can't convert to string")
-        obj.__dict__[self.__class__.__store_name]
+    def __init__(self, required, nullable):
+        super().__init__(required, nullable, type_=[str])
 
 
-class ArgumentsField(object):
-    pass
+class ArgumentsField(BaseField):
+    def __init__(self, required, nullable):
+        super().__init__(required, nullable, type_=[dict])
 
 
-class EmailField(CharField):
-    pass
+class EmailField(BaseField):
+    def __init__(self, required, nullable):
+        super().__init__(required, nullable, validators=[check_if_email])
 
 
-class PhoneField(object):
-    pass
+class PhoneField(BaseFiled):
+    def __init__(self, required, nullable, length, prefix):
+        super().__init__(required, nullable, type_=[str, int],
+                         validators=[has_length(length),
+                                     starts_with(prefix)])
 
 
-class DateField(object):
-    pass
+class DateField(BaseField):
+    def __init__(self, required, nullable, fmt):
+        super().__init__(required, nullable, type_=[str],
+                         validators=[is_date(fmt)])
 
 
-class BirthDayField(object):
-    pass
+class BirthDayField(BaseField):
+    def __init__(self, required, nullable, fmt, years):
+        super().__init__(required, nullable, type_=[str],
+                         validators=[is_date(fmt), is_age_le(fmt, years=70)])
 
 
-class GenderField(object):
-    pass
+class GenderField(BaseField):
+    def __init__(self, required, nullable, range_):
+        super().__init__(required, nullable, type_=[int],
+                         validators=[int_in_range(range_)])
 
 
-class ClientIDsField(object):
-    pass
+class ClientIDsField(BaseField):
+    def __init__(self, required, nullable):
+        super().__init__(required, nullable, type_=[list])
 
 
 class ClientsInterestsRequest(object):
     client_ids = ClientIDsField(required=True)
-    date = DateField(required=False, nullable=True)
+    date = DateField(required=False, nullable=True, fmt='%d.%m.%Y')
 
 
 class OnlineScoreRequest(object):
     first_name = CharField(required=False, nullable=True)
     last_name = CharField(required=False, nullable=True)
     email = EmailField(required=False, nullable=True)
-    phone = PhoneField(required=False, nullable=True)
-    birthday = BirthDayField(required=False, nullable=True)
+    phone = PhoneField(required=False, nullable=True, length=11, prefix='7')
+    birthday = BirthDayField(required=False, nullable=True,
+                             fmt='%d.%m.%Y', years=70)
     gender = GenderField(required=False, nullable=True)
 
 
@@ -113,13 +212,6 @@ class MethodRequest(object):
         self.token = token
         self.arguments = arguments
         self.method = method
-        
-        # TODO: ugly check, can't tell which arguments are invalid. Fix it.
-        if not all(field.is_valid for field in 
-                   [self.account, self.login, self.token, self.arguments, self.method]):
-            # TODO: is it suitable exception type?
-            raise AttributeError("Some fields are invalid")
-
 
     @property
     def is_admin(self):
@@ -128,7 +220,8 @@ class MethodRequest(object):
 
 def check_auth(request):
     if request.is_admin:
-        digest = hashlib.sha512(datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT).hexdigest()
+        digest = hashlib.sha512(datetime.datetime.now().strftime("%Y%m%d%H") +
+                                ADMIN_SALT).hexdigest()
     else:
         digest = hashlib.sha512(request.account + request.login + SALT).hexdigest()
     if digest == request.token:
@@ -165,7 +258,10 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
             logging.info("%s: %s %s" % (self.path, data_string, context["request_id"]))
             if path in self.router:
                 try:
-                    response, code = self.router[path]({"body": request, "headers": self.headers}, context, self.store)
+                    response, code = self.router[path](
+                        {"body": request,
+                         "headers": self.headers},
+                        context, self.store)
                 except Exception as e:
                     logging.exception("Unexpected error: %s" % e)
                     code = INTERNAL_ERROR
