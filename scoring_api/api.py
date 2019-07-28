@@ -53,7 +53,7 @@ class TypedField(object):
         return getattr(obj, self.name, self.default)
 
     def __set__(self, obj, val):
-        if any(map(lambda t: isinstance(val, t), self.type)):
+        if isinstance(val, tuple(self.type_)):
             setattr(obj, self.name, val)
         else:
             raise TypeError('value must be instance of any of {}'
