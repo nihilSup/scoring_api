@@ -1,4 +1,3 @@
-import abc
 import json
 import datetime
 import logging
@@ -7,6 +6,8 @@ import uuid
 from optparse import OptionParser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from dateutil.relativedelta import relativedelta
+
+from scoring_api import field
 
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
@@ -32,66 +33,6 @@ GENDERS = {
     MALE: "male",
     FEMALE: "female",
 }
-
-
-class TypedField(object):
-    __count = 0
-
-    def __init__(self, type_, default=None, name=None):
-        self.type = type_
-        self.default = default
-        cls = self.__class__
-        if not name:
-            name = '_{}_{}_#{}'.format(self.cls.__name__, type_.__name__,
-                                       cls.__count)
-        self.name = name
-        cls.__count += 1
-
-    def __get__(self, obj, owner):
-        if not obj:
-            return self
-        return getattr(obj, self.name, self.default)
-
-    def __set__(self, obj, val):
-        if isinstance(val, tuple(self.type_)):
-            setattr(obj, self.name, val)
-        else:
-            raise TypeError('value must be instance of any of {}'
-                            .format(str(self.type)))
-
-    def __set_name__(self, owner, name):
-        self.name = name
-
-
-class NamedDescrMeta(type):
-    def __init__(cls, name, bases, attrs):
-        super().__init__(name, bases, attrs)
-        for attr_name, attr_val in attrs:
-            if isinstance(attr_val, TypedField):
-                attr_val.__set_name__(cls, attr_name)
-
-
-class BaseField(TypedField):
-    def __init__(self, required, nullable, validators=None, *args, **kwargs):
-        self.required = required
-        self.nullable = nullable
-        if not validators:
-            self.validators = []
-        self.val_set_flag = False
-        super().__init__(*args, **kwargs)
-
-    def __set__(self, obj, val):
-        if not self.nullable and val is None:
-            raise ValueError("Value is required, can't be None")
-        for validator in self.validators:
-            validator(val)
-        self.val_set_flag = True
-        super().__set__(obj, val)
-
-    def __get__(self, obj, owner):
-        if self.required and not self.val_set_flag:
-            raise ValueError("Value has been not set, but it is required")
-        return super().__get__(obj, owner)
 
 
 def has_length(length):
@@ -139,53 +80,65 @@ def int_in_range(range_):
     return validate_int_in_range
 
 
-class CharField(BaseField):
-    def __init__(self, required, nullable):
-        super().__init__(required, nullable, type_=[str])
+def check_type(type_):
+    def validate_type(val):
+        if not isinstance(val, tuple(type_)):
+            raise TypeError('value must be instance of any of {}'
+                            .format(str(type_)))
+    return validate_type
 
 
-class ArgumentsField(BaseField):
-    def __init__(self, required, nullable):
-        super().__init__(required, nullable, type_=[dict])
+class CharField(field.BaseField, field.TypedField):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, type_=[str])
 
 
-class EmailField(BaseField):
-    def __init__(self, required, nullable):
-        super().__init__(required, nullable, validators=[check_if_email])
+class ArgumentsField(field.BaseField, field.TypedField):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, type_=[dict])
 
 
-class PhoneField(BaseFiled):
-    def __init__(self, required, nullable, length, prefix):
-        super().__init__(required, nullable, type_=[str, int],
+class CommonField(field.BaseField, field.ValidatedField, field.TypedField):
+    pass
+
+
+class EmailField(CommonField):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, validators=[check_if_email], type_=[str])
+
+
+class PhoneField(CommonField):
+    def __init__(self, length, prefix, **kwargs):
+        super().__init__(**kwargs, type_=[str, int],
                          validators=[has_length(length),
                                      starts_with(prefix)])
 
 
-class DateField(BaseField):
-    def __init__(self, required, nullable, fmt):
-        super().__init__(required, nullable, type_=[str],
+class DateField(CommonField):
+    def __init__(self, fmt, **kwargs):
+        super().__init__(**kwargs, type_=[str],
                          validators=[is_date(fmt)])
 
 
-class BirthDayField(BaseField):
-    def __init__(self, required, nullable, fmt, years):
-        super().__init__(required, nullable, type_=[str],
-                         validators=[is_date(fmt), is_age_le(fmt, years=70)])
+class BirthDayField(CommonField):
+    def __init__(self, fmt, years, **kwargs):
+        super().__init__(**kwargs, type_=[str],
+                         validators=[is_date(fmt), is_age_le(years, fmt)])
 
 
-class GenderField(BaseField):
-    def __init__(self, required, nullable, range_):
-        super().__init__(required, nullable, type_=[int],
+class GenderField(CommonField):
+    def __init__(self, range_, **kwargs):
+        super().__init__(**kwargs, type_=[int],
                          validators=[int_in_range(range_)])
 
 
-class ClientIDsField(BaseField):
-    def __init__(self, required, nullable):
-        super().__init__(required, nullable, type_=[list])
+class ClientIDsField(CommonField):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs, type_=[list])
 
 
 class ClientsInterestsRequest(object):
-    client_ids = ClientIDsField(required=True)
+    client_ids = ClientIDsField(required=True, nullable=False)
     date = DateField(required=False, nullable=True, fmt='%d.%m.%Y')
 
 
@@ -196,7 +149,7 @@ class OnlineScoreRequest(object):
     phone = PhoneField(required=False, nullable=True, length=11, prefix='7')
     birthday = BirthDayField(required=False, nullable=True,
                              fmt='%d.%m.%Y', years=70)
-    gender = GenderField(required=False, nullable=True)
+    gender = GenderField(range_=[0, 1, 2], required=False, nullable=True)
 
 
 class MethodRequest(object):
@@ -206,7 +159,7 @@ class MethodRequest(object):
     arguments = ArgumentsField(required=True, nullable=True)
     method = CharField(required=True, nullable=False)
 
-    def __init__(self, account, login, token, arguments, method):
+    def __init__(self, ):
         self.account = account
         self.login = login
         self.token = token
