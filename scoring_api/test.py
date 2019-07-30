@@ -3,7 +3,7 @@ import datetime
 import functools
 import unittest
 
-import api
+from scoring_api import api
 
 
 def cases(cases):

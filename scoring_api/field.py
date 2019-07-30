@@ -1,3 +1,4 @@
+"""Descriptor field module"""
 
 
 class Field(object):
@@ -34,41 +35,12 @@ class NamedDescrMeta(type):
                 attr_val.__set_name__(cls, attr_name)
 
 
-class BaseField(Field):
-    def __init__(self, required, nullable, **kwargs):
-        self.required = required
-        self.nullable = nullable
-        self.val_set_flag = False
-        super().__init__(**kwargs)
-
-    def __set__(self, obj, val):
-        if not self.nullable and val is None:
-            raise ValueError("Value is required, can't be None")
-        self.val_set_flag = True
-        super().__set__(obj, val)
-
-    def __get__(self, obj, owner):
-        if self.required and not self.val_set_flag:
-            raise ValueError("Value has been not set, but it is required")
-        return super().__get__(obj, owner)
-
-
-class TypedField(Field):
-    """Class based equivalent of check_type validator"""
-    def __init__(self, type_, **kwargs):
-        self.type = type_
-        super().__init__(**kwargs)
-
-    def __set__(self, obj, val):
-        if isinstance(val, tuple(self.type)):
-            super().__set__(obj, val)
-        else:
-            raise TypeError('value must be instance of any of {}'
-                            .format(str(self.type)))
-
-
 class ValidatedField(Field):
-    """Field descriptor with set validators"""
+    """
+    Field descriptor with set validators.
+    Args:
+        validators: list of callable.
+    """
     def __init__(self, validators=None, **kwargs):
         """Args:
             validators: list of callable"""
@@ -77,7 +49,61 @@ class ValidatedField(Field):
         self.validators = validators
         super().__init__(**kwargs)
 
-    def __set__(self, obj, val):
-        for validator in self.validators:
-            validator(val)
-        super().__set__(obj, val)
+    def validate(self, obj):
+        val = getattr(obj, self.name, self.default)
+        try:
+            res = all(validator(val) for validator in self.validators)
+        except (ValueError, TypeError) as e:
+            return str(e), False
+        return "OK" if res else "Failed", res
+
+
+class NullableField(ValidatedField):
+    def __init__(self, nullable, **kwargs):
+        self.nullable = nullable
+        super().__init__(**kwargs)
+
+    def validate(self, obj):
+        val = getattr(obj, self.name, self.default)
+        if self.nullable and val is None:
+            return "OK", True
+        elif not self.nullable and val is None:
+            return "None value in not nullable field", False
+        else:
+            return super().validate(obj)
+
+
+class RequiredField(ValidatedField):
+    """
+    This field must be first in local precedence order
+    """
+    def __init__(self, required, **kwargs):
+        self.required = required
+        super().__init__(**kwargs)
+
+    def validate(self, obj):
+        if not hasattr(obj, self.name) and self.required:
+            return "Missing required field", False
+        elif not hasattr(obj, self.name) and not self.required:
+            return "OK", True
+        else:
+            return super().validate(obj)
+
+
+class TypedField(ValidatedField):
+    """Class based equivalent of check_type validator"""
+    def __init__(self, type_, **kwargs):
+        self.type_ = type_
+        super().__init__(**kwargs)
+
+    def validate(self, obj):
+        val = getattr(obj, self.name, self.default)
+        if not isinstance(val, tuple(self.type_)):
+            return "Incorrect type, expected any of %s" % self.type_, False
+        else:
+            return super().validate(obj)
+
+
+class BaseField(RequiredField, NullableField):
+    """helper alias for RequiredField and NullableField"""
+    pass

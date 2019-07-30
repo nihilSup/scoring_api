@@ -3,6 +3,7 @@ import datetime
 import logging
 import hashlib
 import uuid
+import abc
 from optparse import OptionParser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from dateutil.relativedelta import relativedelta
@@ -41,26 +42,35 @@ def has_length(length):
         if cur_length != length:
             raise ValueError('Incorrect length. Expected {}, but got {}'
                              .format(length, cur_length))
+        else:
+            return True
     return valdiate_length
 
 
 def starts_with(char):
+    char = str(char)
+
     def validate_prefix(val):
         first = str(val)[0]
         if first != char:
             raise ValueError('Incorrect prefix. Expected {}, but got {}'
                              .format(char, first))
+        else:
+            return True
     return validate_prefix
 
 
 def check_if_email(val):
     if '@' not in val:
         raise ValueError('There is no @ in email field')
+    else:
+        return True
 
 
 def is_date(fmt):
     def valdiate_date(val):
         datetime.datetime.strptime(val, fmt)
+        return True
     return valdiate_date
 
 
@@ -70,6 +80,8 @@ def is_age_le(years, fmt):
         now = datetime.datetime.now()
         if relativedelta(now, bday).years > years:
             raise ValueError('Age is bigger then {}'.format(years))
+        else:
+            return True
     return validate_age
 
 
@@ -77,6 +89,8 @@ def int_in_range(range_):
     def validate_int_in_range(val):
         if val not in range_:
             raise ValueError('Value: {} not in range'.format(val))
+        else:
+            return True
     return validate_int_in_range
 
 
@@ -85,6 +99,8 @@ def check_type(type_):
         if not isinstance(val, tuple(type_)):
             raise TypeError('value must be instance of any of {}'
                             .format(str(type_)))
+        else:
+            return True
     return validate_type
 
 
@@ -98,7 +114,8 @@ class ArgumentsField(field.BaseField, field.TypedField):
         super().__init__(**kwargs, type_=[dict])
 
 
-class CommonField(field.BaseField, field.ValidatedField, field.TypedField):
+class CommonField(field.BaseField, field.TypedField):
+    """alias for BaseField and TypedField"""
     pass
 
 
@@ -137,12 +154,33 @@ class ClientIDsField(CommonField):
         super().__init__(**kwargs, type_=[list])
 
 
-class ClientsInterestsRequest(object):
+class Request(abc.ABC):
+    def __init__(self, request):
+        self.valid = True
+        for attr_name, attr_value in request.items():
+            setattr(self, attr_name, attr_value)
+
+    @abc.abstractmethod
+    def validate(self):
+        invalid_fields = []
+        for attr_name, attr_val in self.__class__.__dict__.items():
+            if isinstance(attr_val, field.ValidatedField):
+                msg, valid = attr_val.validate(self)
+                if not valid:
+                    invalid_fields.append(attr_val.name)
+        if invalid_fields:
+            msg = "invalid fields: " + ', '.join(invalid_fields)
+            return msg, INVALID_REQUEST
+        else:
+            return "", OK
+
+
+class ClientsInterestsRequest(Request):
     client_ids = ClientIDsField(required=True, nullable=False)
     date = DateField(required=False, nullable=True, fmt='%d.%m.%Y')
 
 
-class OnlineScoreRequest(object):
+class OnlineScoreRequest(Request):
     first_name = CharField(required=False, nullable=True)
     last_name = CharField(required=False, nullable=True)
     email = EmailField(required=False, nullable=True)
@@ -151,20 +189,23 @@ class OnlineScoreRequest(object):
                              fmt='%d.%m.%Y', years=70)
     gender = GenderField(range_=[0, 1, 2], required=False, nullable=True)
 
+    def validate(self):
+        status, msg = super().validate()
+        if status != OK:
+            return msg, status
+        if (self.phone and self.email or self.first_name and self.last_name or
+           birthday and not (gender is None)):
+            return "", OK
+        else:
+            return "There is no available field pairs", INVALID_REQUEST
 
-class MethodRequest(object):
+
+class MethodRequest(Request):
     account = CharField(required=False, nullable=True)
     login = CharField(required=True, nullable=True)
     token = CharField(required=True, nullable=True)
     arguments = ArgumentsField(required=True, nullable=True)
     method = CharField(required=True, nullable=False)
-
-    def __init__(self, ):
-        self.account = account
-        self.login = login
-        self.token = token
-        self.arguments = arguments
-        self.method = method
 
     @property
     def is_admin(self):
@@ -183,6 +224,19 @@ def check_auth(request):
 
 
 def method_handler(request, ctx, store):
+    method_request = MethodRequest(request)
+    if not check_auth(method_request):
+        return ERRORS[FORBIDDEN], FORBIDDEN
+    msg, code = method_request.validate()
+    if code != OK:
+        return msg, code
+    if method_request.method == 'online_score':
+        conc_method_req = OnlineScoreRequest(method_request.arguments)
+    elif method_request.method == 'clients_interests':
+        conc_method_req = ClientsInterestsRequest(method_request.arguments)
+    else:
+        return ERRORS[NOT_FOUND], "Unknown method - %s" % method_request.method
+    response, code = conc_method_req.validate()
     response, code = None, None
     return response, code
 
