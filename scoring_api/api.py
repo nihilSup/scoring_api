@@ -9,6 +9,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from dateutil.relativedelta import relativedelta
 
 from scoring_api import field
+from scoring_api import scoring
 
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
@@ -160,19 +161,26 @@ class Request(abc.ABC):
         for attr_name, attr_value in request.items():
             setattr(self, attr_name, attr_value)
 
+    def fields(self):
+        for attr_name, attr_val in self.__class__.__dict__.items():
+            if isinstance(attr_val, field.ValidatedField):
+                yield attr_name, attr_val
+
     @abc.abstractmethod
     def validate(self):
         invalid_fields = []
-        for attr_name, attr_val in self.__class__.__dict__.items():
-            if isinstance(attr_val, field.ValidatedField):
-                msg, valid = attr_val.validate(self)
-                if not valid:
-                    invalid_fields.append(attr_val.name)
+        for attr_name, attr_val in self.fields():
+            msg, valid = attr_val.validate(self)
+            if not valid:
+                invalid_fields.append(attr_name)
         if invalid_fields:
             msg = "invalid fields: " + ', '.join(invalid_fields)
             return msg, INVALID_REQUEST
         else:
             return "", OK
+
+    def as_dict(self):
+        return dict((name, val) for name, val in self.fields())
 
 
 class ClientsInterestsRequest(Request):
@@ -198,6 +206,11 @@ class OnlineScoreRequest(Request):
             return "", OK
         else:
             return "There is no available field pairs", INVALID_REQUEST
+
+    @property
+    def has(self):
+        return [field_name for field_name, field in self.fields()
+                if getattr(self, field_name) is not None]
 
 
 class MethodRequest(Request):
@@ -232,11 +245,22 @@ def method_handler(request, ctx, store):
         return msg, code
     if method_request.method == 'online_score':
         conc_method_req = OnlineScoreRequest(method_request.arguments)
+        msg, code = conc_method_req.validate()
+        if code != OK:
+            return msg, code
+        ctx['has'] = conc_method_req.has
+        if method_request.is_admin:
+            return {'score': 42}, OK
+        else:
+            return {'score': scoring.get_score(**conc_method_req.as_dict)}, OK
     elif method_request.method == 'clients_interests':
         conc_method_req = ClientsInterestsRequest(method_request.arguments)
+        msg, code = conc_method_req.validate()
+        if code != OK:
+            return msg, code
+        
     else:
         return ERRORS[NOT_FOUND], "Unknown method - %s" % method_request.method
-    response, code = conc_method_req.validate()
     response, code = None, None
     return response, code
 
