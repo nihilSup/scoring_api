@@ -120,7 +120,7 @@ class TestRequiredField(unittest.TestCase):
 class TestTypedField(unittest.TestCase):
     def test_str_field(self):
         class C(object):
-            str_field = field.TypedField(type_=[str])
+            str_field = field.TypedField(type_=str)
         c = C()
         c.str_field = 'some'
         self.assertEqual(c.str_field, 'some')
@@ -128,7 +128,7 @@ class TestTypedField(unittest.TestCase):
 
     def test_mixed_field(self):
         class C(object):
-            mixed_field = field.TypedField(type_=[list, int])
+            mixed_field = field.TypedField(type_=(list, int))
         c = C()
         c.mixed_field = ['a']
         self.assertEqual(C.mixed_field.validate(c), ("OK", True))
@@ -138,7 +138,7 @@ class TestTypedField(unittest.TestCase):
 
     def test_invalid_str_field(self):
         class C(object):
-            str_field = field.TypedField(type_=[str])
+            str_field = field.TypedField(type_=str)
         c = C()
         c.str_field = 5
         msg, is_valid = C.str_field.validate(c)
@@ -147,7 +147,7 @@ class TestTypedField(unittest.TestCase):
 
     def test_invalid_mixed_field(self):
         class C(object):
-            mixed_field = field.TypedField(type_=[list, int])
+            mixed_field = field.TypedField(type_=(list, int))
         c = C()
         c.mixed_field = 'some'
         msg, is_valid = C.mixed_field.validate(c)

@@ -67,7 +67,7 @@ class NullableField(ValidatedField):
         val = getattr(obj, self.name, self.default)
         if self.nullable and not val:
             return "OK", True
-        elif not self.nullable and not val:
+        elif not self.nullable and not val and val != 0:
             return "None value in not nullable field", False
         else:
             return super().validate(obj)
@@ -98,7 +98,8 @@ class TypedField(ValidatedField):
 
     def validate(self, obj):
         val = getattr(obj, self.name, self.default)
-        if not isinstance(val, tuple(self.type_)):
-            return "Incorrect type, expected any of %s" % self.type_, False
+        if not isinstance(val, self.type_):
+            return ("Incorrect type, expected any of %s" % str(self.type_),
+                    False)
         else:
             return super().validate(obj)

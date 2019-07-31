@@ -38,6 +38,10 @@ GENDERS = {
 
 
 def has_length(length):
+    if length <= 0:
+        raise ValueError('Length must be positive int')
+    length = int(length)
+
     def valdiate_length(val):
         cur_length = len(str(val))
         if cur_length != length:
@@ -76,6 +80,10 @@ def is_date(fmt):
 
 
 def is_age_le(years, fmt):
+    if years <= 0:
+        raise ValueError('Length must be positive int')
+    years = int(years)
+
     def validate_age(val):
         bday = datetime.datetime.strptime(val, fmt)
         now = datetime.datetime.now()
@@ -97,7 +105,7 @@ def int_in_range(range_):
 
 def check_type(type_):
     def validate_type(val):
-        if not isinstance(val, tuple(type_)):
+        if not isinstance(val, type_):
             raise TypeError('value must be instance of any of {}'
                             .format(str(type_)))
         else:
@@ -108,7 +116,7 @@ def check_type(type_):
 def item_has_type(type_):
     def validate_items_type(val):
         for item in val:
-            if not isinstance(item, tuple(type_)):
+            if not isinstance(item, type_):
                 raise TypeError('value must be instance of any of {}'
                                 .format(str(type_)))
         return True
@@ -122,51 +130,51 @@ class CommonField(field.RequiredField, field.NullableField, field.TypedField):
 
 class CharField(CommonField):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs, type_=[str])
+        super().__init__(**kwargs, type_=str)
 
 
 class ArgumentsField(CommonField):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs, type_=[dict])
+        super().__init__(**kwargs, type_=dict)
 
 
 class EmailField(CommonField):
     def __init__(self, **kwargs):
         validators = [check_if_email] + kwargs.pop('validators', [])
-        super().__init__(**kwargs, type_=[str], validators=validators)
+        super().__init__(**kwargs, type_=str, validators=validators)
 
 
 class PhoneField(CommonField):
     def __init__(self, length, prefix, **kwargs):
         validators = ([has_length(length), starts_with(prefix)] +
                       kwargs.pop('validators', []))
-        super().__init__(**kwargs, type_=[str, int], validators=validators)
+        super().__init__(**kwargs, type_=(str, int), validators=validators)
 
 
 class DateField(CommonField):
     def __init__(self, fmt, **kwargs):
         validators = [is_date(fmt)] + kwargs.pop('validators', [])
-        super().__init__(**kwargs, type_=[str], validators=validators)
+        super().__init__(**kwargs, type_=str, validators=validators)
 
 
 class BirthDayField(CommonField):
     def __init__(self, fmt, years, **kwargs):
         validators = ([is_date(fmt), is_age_le(years, fmt)] +
                       kwargs.pop('validators', []))
-        super().__init__(**kwargs, type_=[str], validators=validators)
+        super().__init__(**kwargs, type_=str, validators=validators)
 
 
 class GenderField(CommonField):
     def __init__(self, range_, **kwargs):
         validators = [int_in_range(range_)] + kwargs.pop('validators', [])
-        super().__init__(**kwargs, type_=[int],
+        super().__init__(**kwargs, type_=int,
                          validators=validators)
 
 
 class ClientIDsField(CommonField):
     def __init__(self, **kwargs):
-        validators = [item_has_type([int])] + kwargs.pop('validators', [])
-        super().__init__(**kwargs, type_=[list],
+        validators = [item_has_type(int)] + kwargs.pop('validators', [])
+        super().__init__(**kwargs, type_=list,
                          validators=validators)
 
 
@@ -315,7 +323,8 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
 
         if request:
             path = self.path.strip("/")
-            logging.info("%s: %s %s" % (self.path, data_string, context["request_id"]))
+            logging.info("%s: %s %s" % (self.path, data_string,
+                                        context["request_id"]))
             if path in self.router:
                 try:
                     response, code = self.router[path](
@@ -334,7 +343,8 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
         if code not in ERRORS:
             r = {"response": response, "code": code}
         else:
-            r = {"error": response or ERRORS.get(code, "Unknown Error"), "code": code}
+            r = {"error": response or ERRORS.get(code, "Unknown Error"),
+                 "code": code}
         context.update(r)
         logging.info(context)
         self.wfile.write(json.dumps(r))
@@ -347,7 +357,8 @@ if __name__ == "__main__":
     op.add_option("-l", "--log", action="store", default=None)
     (opts, args) = op.parse_args()
     logging.basicConfig(filename=opts.log, level=logging.INFO,
-                        format='[%(asctime)s] %(levelname).1s %(message)s', datefmt='%Y.%m.%d %H:%M:%S')
+                        format='[%(asctime)s] %(levelname).1s %(message)s',
+                        datefmt='%Y.%m.%d %H:%M:%S')
     server = HTTPServer(("localhost", opts.port), MainHTTPHandler)
     logging.info("Starting server at %s" % opts.port)
     try:

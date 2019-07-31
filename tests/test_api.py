@@ -4,7 +4,7 @@ import functools
 from scoring_api import api
 
 
-def with_cases(cases):
+def cases(cases):
     def wrapper(f):
         @functools.wraps(f)
         def inner_wrapper(*args):
@@ -20,7 +20,7 @@ def help_msg(**kwargs):
 
 
 class TestCharField(unittest.TestCase):
-    @with_cases([
+    @cases([
         ('abcde', True),
         ('', False),
         ('a', True),
@@ -47,7 +47,7 @@ class TestEmailField(unittest.TestCase):
             email_field = api.EmailField(required=True, nullable=False)
         self.obj = SomeCls()
 
-    @with_cases([
+    @cases([
         ('ab@cde', True),
         ('abcde', False),
         (None, False),
@@ -67,7 +67,7 @@ class TestEmailField(unittest.TestCase):
 
 
 class TestPhoneField(unittest.TestCase):
-    @with_cases([
+    @cases([
         ('71234567890', True), (71234567890, True), ('abcde', False),
         (None, False), ('12345678901', False), (12345678901, False),
         ('123456789012', False), (123456789012, False),
@@ -84,8 +84,51 @@ class TestPhoneField(unittest.TestCase):
                                                       msg=msg))
 
 
+class TestClientIDsField(unittest.TestCase):
+    @cases([
+        ([], False),
+        ([[]], False),
+        (None, False),
+        ('abcde', False),
+        ([1, 2], True),
+        (['1', '2'], False),
+        ([[1], [2]], False),
+    ])
+    def test_table_tests(self, val, expected):
+        class C(object):
+            field = api.ClientIDsField(required=True, nullable=False)
+        c = C()
+        c.field = val
+        self.assertEqual(c.field, val)
+        msg, is_valid = C.field.validate(c)
+        self.assertEqual(is_valid, expected, help_msg(val=val, exp=expected,
+                                                      msg=msg))
+
+
+class TestGenderField(unittest.TestCase):
+    @cases([
+        (2, True),
+        (1, True),
+        (0, True),
+        (-1, False),
+        ('1', False),
+        ([1, 2], False),
+        (None, False),
+    ])
+    def test_table_tests(self, val, expected):
+        class C(object):
+            field = api.GenderField(range_=[0, 1, 2], required=True,
+                                    nullable=False)
+        c = C()
+        c.field = val
+        self.assertEqual(c.field, val)
+        msg, is_valid = C.field.validate(c)
+        self.assertEqual(is_valid, expected, help_msg(val=val, exp=expected,
+                                                      msg=msg))
+
+
 class TestRequest(unittest.TestCase):
-    @with_cases([
+    @cases([
         (dict(char_field='aaaa', phone_field=12345), api.OK),
         (dict(char_field='', phone_field=12345, opt_char_field='a'),
          api.INVALID_REQUEST),
@@ -108,7 +151,7 @@ class TestRequest(unittest.TestCase):
         msg, is_valid = c.validate()
         self.assertEqual(is_valid, expected, help_msg(**request))
 
-    @with_cases([
+    @cases([
         ({}, api.OK),
         (dict(char_field='aaaa', phone_field=12345), api.OK),
         (dict(char_field='', phone_field=-1), api.INVALID_REQUEST),
