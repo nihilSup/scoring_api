@@ -114,6 +114,9 @@ class TestGenderField(unittest.TestCase):
         ('1', False),
         ([1, 2], False),
         (None, False),
+        ([], False),
+        ([1, '2', 3], False),
+        ([1, '', 3], False),
     ])
     def test_table_tests(self, val, expected):
         class C(object):
