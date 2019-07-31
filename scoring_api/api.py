@@ -105,19 +105,29 @@ def check_type(type_):
     return validate_type
 
 
-class CharField(field.BaseField, field.TypedField):
+def item_has_type(type_):
+    def validate_items_type(val):
+        for item in val:
+            if not isinstance(item, tuple(type_)):
+                raise TypeError('value must be instance of any of {}'
+                                .format(str(type_)))
+        return True
+    return validate_items_type
+
+
+class CommonField(field.RequiredField, field.NullableField, field.TypedField):
+    """alias for RequiredField, NullableField and TypedField combination"""
+    pass
+
+
+class CharField(CommonField):
     def __init__(self, **kwargs):
         super().__init__(**kwargs, type_=[str])
 
 
-class ArgumentsField(field.BaseField, field.TypedField):
+class ArgumentsField(CommonField):
     def __init__(self, **kwargs):
         super().__init__(**kwargs, type_=[dict])
-
-
-class CommonField(field.BaseField, field.TypedField):
-    """alias for BaseField and TypedField"""
-    pass
 
 
 class EmailField(CommonField):
@@ -152,7 +162,8 @@ class GenderField(CommonField):
 
 class ClientIDsField(CommonField):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs, type_=[list])
+        super().__init__(**kwargs, type_=[list],
+                         validators=[item_has_type([int])])
 
 
 class Request(abc.ABC):
@@ -187,6 +198,13 @@ class ClientsInterestsRequest(Request):
     client_ids = ClientIDsField(required=True, nullable=False)
     date = DateField(required=False, nullable=True, fmt='%d.%m.%Y')
 
+    def validate(self):
+        return super().validate()
+
+    @property
+    def nclients(self):
+        return len(self.client_ids)
+
 
 class OnlineScoreRequest(Request):
     first_name = CharField(required=False, nullable=True)
@@ -198,11 +216,11 @@ class OnlineScoreRequest(Request):
     gender = GenderField(range_=[0, 1, 2], required=False, nullable=True)
 
     def validate(self):
-        status, msg = super().validate()
+        msg, status = super().validate()
         if status != OK:
             return msg, status
         if (self.phone and self.email or self.first_name and self.last_name or
-           birthday and not (gender is None)):
+           self.birthday and self.gender is not None):
             return "", OK
         else:
             return "There is no available field pairs", INVALID_REQUEST
@@ -224,25 +242,30 @@ class MethodRequest(Request):
     def is_admin(self):
         return self.login == ADMIN_LOGIN
 
+    def validate(self):
+        return super().validate()
+
 
 def check_auth(request):
     if request.is_admin:
-        digest = hashlib.sha512(datetime.datetime.now().strftime("%Y%m%d%H") +
-                                ADMIN_SALT).hexdigest()
+        to_hash = datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT
+        digest = hashlib.sha512(to_hash.encode(encoding='UTF-8')).hexdigest()
     else:
-        digest = hashlib.sha512(request.account + request.login + SALT).hexdigest()
+        to_hash = request.account + request.login + SALT
+        digest = hashlib.sha512(to_hash.encode(encoding='UTF-8')).hexdigest()
     if digest == request.token:
         return True
     return False
 
 
 def method_handler(request, ctx, store):
-    method_request = MethodRequest(request)
-    if not check_auth(method_request):
-        return ERRORS[FORBIDDEN], FORBIDDEN
+    req_body = request['body']
+    method_request = MethodRequest(req_body)
     msg, code = method_request.validate()
     if code != OK:
         return msg, code
+    if not check_auth(method_request):
+        return ERRORS[FORBIDDEN], FORBIDDEN
     if method_request.method == 'online_score':
         conc_method_req = OnlineScoreRequest(method_request.arguments)
         msg, code = conc_method_req.validate()
@@ -250,19 +273,21 @@ def method_handler(request, ctx, store):
             return msg, code
         ctx['has'] = conc_method_req.has
         if method_request.is_admin:
-            return {'score': 42}, OK
+            return dict(score=42), OK
         else:
-            return {'score': scoring.get_score(**conc_method_req.as_dict)}, OK
+            score = scoring.get_score(store, **conc_method_req.as_dict())
+            return dict(score=score), OK
     elif method_request.method == 'clients_interests':
         conc_method_req = ClientsInterestsRequest(method_request.arguments)
         msg, code = conc_method_req.validate()
         if code != OK:
             return msg, code
-        
+        ctx['nclients'] = conc_method_req.nclients
+        response = {cid: scoring.get_interests(store, cid)
+                    for cid in conc_method_req.client_ids}
+        return response, OK
     else:
         return ERRORS[NOT_FOUND], "Unknown method - %s" % method_request.method
-    response, code = None, None
-    return response, code
 
 
 class MainHTTPHandler(BaseHTTPRequestHandler):

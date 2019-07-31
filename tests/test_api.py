@@ -22,6 +22,9 @@ def help_msg(**kwargs):
 class TestCharField(unittest.TestCase):
     @with_cases([
         ('abcde', True),
+        ('', False),
+        ('a', True),
+        ('1', True),
         (None, False),
         (5, False),
     ])
@@ -48,7 +51,8 @@ class TestEmailField(unittest.TestCase):
         ('ab@cde', True),
         ('abcde', False),
         (None, False),
-        (5, False)
+        (5, False),
+        ('', False),
     ])
     def test_valid_cases(self, val, expected):
         class C(object):
@@ -83,7 +87,8 @@ class TestPhoneField(unittest.TestCase):
 class TestRequest(unittest.TestCase):
     @with_cases([
         (dict(char_field='aaaa', phone_field=12345), api.OK),
-        (dict(char_field='', phone_field=12345, opt_char_field='a'), api.OK),
+        (dict(char_field='', phone_field=12345, opt_char_field='a'), 
+         api.INVALID_REQUEST),
         (dict(char_field=1, phone_field=22345, opt_char_field='a'),
          api.INVALID_REQUEST),
         (dict(phone_field=12345, opt_char_field='a'), api.INVALID_REQUEST),
