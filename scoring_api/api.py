@@ -132,38 +132,42 @@ class ArgumentsField(CommonField):
 
 class EmailField(CommonField):
     def __init__(self, **kwargs):
-        super().__init__(**kwargs, validators=[check_if_email], type_=[str])
+        validators = [check_if_email] + kwargs.pop('validators', [])
+        super().__init__(**kwargs, type_=[str], validators=validators)
 
 
 class PhoneField(CommonField):
     def __init__(self, length, prefix, **kwargs):
-        super().__init__(**kwargs, type_=[str, int],
-                         validators=[has_length(length),
-                                     starts_with(prefix)])
+        validators = ([has_length(length), starts_with(prefix)] +
+                      kwargs.pop('validators', []))
+        super().__init__(**kwargs, type_=[str, int], validators=validators)
 
 
 class DateField(CommonField):
     def __init__(self, fmt, **kwargs):
-        super().__init__(**kwargs, type_=[str],
-                         validators=[is_date(fmt)])
+        validators = [is_date(fmt)] + kwargs.pop('validators', [])
+        super().__init__(**kwargs, type_=[str], validators=validators)
 
 
 class BirthDayField(CommonField):
     def __init__(self, fmt, years, **kwargs):
-        super().__init__(**kwargs, type_=[str],
-                         validators=[is_date(fmt), is_age_le(years, fmt)])
+        validators = ([is_date(fmt), is_age_le(years, fmt)] +
+                      kwargs.pop('validators', []))
+        super().__init__(**kwargs, type_=[str], validators=validators)
 
 
 class GenderField(CommonField):
     def __init__(self, range_, **kwargs):
+        validators = [int_in_range(range_)] + kwargs.pop('validators', [])
         super().__init__(**kwargs, type_=[int],
-                         validators=[int_in_range(range_)])
+                         validators=validators)
 
 
 class ClientIDsField(CommonField):
     def __init__(self, **kwargs):
+        validators = [item_has_type([int])] + kwargs.pop('validators', [])
         super().__init__(**kwargs, type_=[list],
-                         validators=[item_has_type([int])])
+                         validators=validators)
 
 
 class Request(abc.ABC):

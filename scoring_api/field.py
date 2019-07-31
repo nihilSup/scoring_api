@@ -75,7 +75,7 @@ class NullableField(ValidatedField):
 
 class RequiredField(ValidatedField):
     """
-    This field must be first in local precedence order
+    This field must be before NullableField in local precedence order
     """
     def __init__(self, required, **kwargs):
         self.required = required

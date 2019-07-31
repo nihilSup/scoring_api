@@ -87,7 +87,7 @@ class TestPhoneField(unittest.TestCase):
 class TestRequest(unittest.TestCase):
     @with_cases([
         (dict(char_field='aaaa', phone_field=12345), api.OK),
-        (dict(char_field='', phone_field=12345, opt_char_field='a'), 
+        (dict(char_field='', phone_field=12345, opt_char_field='a'),
          api.INVALID_REQUEST),
         (dict(char_field=1, phone_field=22345, opt_char_field='a'),
          api.INVALID_REQUEST),
