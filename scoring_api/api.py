@@ -203,7 +203,7 @@ class Request(abc.ABC):
             return "", OK
 
     def as_dict(self):
-        return dict((name, val) for name, val in self.fields())
+        return dict(self.fields())
 
 
 class ClientsInterestsRequest(Request):
