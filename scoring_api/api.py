@@ -318,7 +318,8 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
         try:
             data_string = self.rfile.read(int(self.headers['Content-Length']))
             request = json.loads(data_string)
-        except:
+        except Exception as e:
+            logging.exception(e)
             code = BAD_REQUEST
 
         if request:
@@ -347,7 +348,7 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
                  "code": code}
         context.update(r)
         logging.info(context)
-        self.wfile.write(json.dumps(r))
+        self.wfile.write(json.dumps(r).encode('UTF-8'))
         return
 
 
