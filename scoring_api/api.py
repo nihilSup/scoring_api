@@ -73,16 +73,20 @@ def check_if_email(val):
 
 
 def is_date(fmt):
+    if not isinstance(fmt, str):
+        raise ValueError('Format must be string')
+
     def valdiate_date(val):
         datetime.datetime.strptime(val, fmt)
         return True
+
     return valdiate_date
 
 
 def is_age_le(years, fmt):
+    years = int(years)
     if years <= 0:
         raise ValueError('Length must be positive int')
-    years = int(years)
 
     def validate_age(val):
         bday = datetime.datetime.strptime(val, fmt)
