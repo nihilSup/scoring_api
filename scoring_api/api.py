@@ -262,16 +262,18 @@ class MethodRequest(Request):
         return super().validate()
 
 
-def check_auth(request):
+def digestize(request):
     if request.is_admin:
         to_hash = datetime.datetime.now().strftime("%Y%m%d%H") + ADMIN_SALT
         digest = hashlib.sha512(to_hash.encode(encoding='UTF-8')).hexdigest()
     else:
         to_hash = request.account + request.login + SALT
         digest = hashlib.sha512(to_hash.encode(encoding='UTF-8')).hexdigest()
-    if digest == request.token:
-        return True
-    return False
+    return digest
+
+
+def check_auth(request):
+    return digestize(request) == request.token
 
 
 def method_handler(request, ctx, store):
