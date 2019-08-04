@@ -207,7 +207,8 @@ class Request(abc.ABC):
             return "", OK
 
     def as_dict(self):
-        return dict(self.fields())
+        return dict((attr_name, getattr(self, attr_name))
+                    for attr_name, attr_val in self.fields())
 
 
 class ClientsInterestsRequest(Request):
