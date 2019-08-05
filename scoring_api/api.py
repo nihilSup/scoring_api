@@ -10,6 +10,7 @@ from dateutil.relativedelta import relativedelta
 
 from scoring_api import field
 from scoring_api import scoring
+from scoring_api import store
 
 SALT = "Otus"
 ADMIN_LOGIN = "admin"
@@ -313,7 +314,7 @@ class MainHTTPHandler(BaseHTTPRequestHandler):
     router = {
         "method": method_handler
     }
-    store = None
+    store = store.RedisStore()
 
     def get_request_id(self, headers):
         return headers.get('HTTP_X_REQUEST_ID', uuid.uuid4().hex)

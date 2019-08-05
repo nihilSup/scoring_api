@@ -21,7 +21,18 @@ class TestSuite(unittest.TestCase):
     def setUp(self):
         self.context = {}
         self.headers = {}
-        self.settings = {}
+
+        class StoreMock(object):
+            def get(self, key):
+                return '["some", "other"]'
+
+            def cache_get(self, key):
+                return None
+
+            def cache_set(self, key, val, sec):
+                pass
+
+        self.settings = StoreMock()
 
     def get_response(self, request):
         return api.method_handler({"body": request, "headers": self.headers},

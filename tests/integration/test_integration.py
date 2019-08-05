@@ -4,7 +4,9 @@ from http.server import HTTPServer
 import requests
 import functools
 
-from scoring_api import api
+import fakeredis
+
+from scoring_api import api, store
 
 
 def cases(cases):
@@ -22,6 +24,10 @@ class TestApp(unittest.TestCase):
     def setUp(self):
         self.host = 'localhost'
         self.port = 8080
+        api.MainHTTPHandler.store = store.RedisStore(
+            attempts=2, timeout=1,
+            client_builder=lambda: fakeredis.FakeStrictRedis()
+        )
         server = HTTPServer((self.host, self.port), api.MainHTTPHandler)
         self.server = server
         server_thread = threading.Thread(target=server.serve_forever)
@@ -47,7 +53,7 @@ class TestApp(unittest.TestCase):
     def test_basic(self, json):
         json['token'] = api.digestize(api.MethodRequest(json))
         response = requests.post(self.url, json=json)
-        self.assertTrue(response.status_code == api.OK, response.status_code)
+        self.assertTrue(response.status_code == api.OK, response.text)
 
     @cases([
         {"account": "horns&hoofs", "login": "admin", "method":
@@ -64,6 +70,9 @@ class TestApp(unittest.TestCase):
         ({"account": "horns&hoofs", "login": "admin", "method":
          "online_score", "arguments":
             {"phone": "71111111111", "email": "some@some"}}, api.OK),
+        ({"account": "horns&hoofs", "login": "dude", "method":
+         "online_score", "arguments":
+            {"phone": "71111111111", "email": "some@some"}}, api.OK),
         ({"account": "horns&hoofs", "login": "admin", "method":
          "online_score", "arguments":
             {}}, api.INVALID_REQUEST),
@@ -71,6 +80,8 @@ class TestApp(unittest.TestCase):
     def test_handler_online_score(self, json, expected):
         json['token'] = api.digestize(api.MethodRequest(json))
         response = requests.post(self.url, json=json)
+        if expected == api.OK:
+            self.assertIsNotNone(response.json()['response']['score'])
         self.assertTrue(response.status_code == expected, response.status_code)
 
     @cases([
@@ -84,6 +95,8 @@ class TestApp(unittest.TestCase):
     def test_handler_clients_interests(self, json, expected):
         json['token'] = api.digestize(api.MethodRequest(json))
         response = requests.post(self.url, json=json)
+        if expected == api.OK:
+            self.assertIsNotNone(response.json()['response'])
         self.assertTrue(response.status_code == expected, response.status_code)
 
 
