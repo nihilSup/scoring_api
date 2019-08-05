@@ -281,7 +281,7 @@ class TestRequestsSuite(unittest.TestCase):
     def test_method_request(self, request, expected):
         meth_req_obj = api.MethodRequest(request)
         msg, valid = meth_req_obj.validate()
-        self.assertEquals(valid, expected, help_msg(exp=expected, **request))
+        self.assertEqual(valid, expected, help_msg(exp=expected, **request))
 
     @cases([
         ({"phone": "qdads", "email": "bb@aa", "gender": 0,
@@ -296,7 +296,7 @@ class TestRequestsSuite(unittest.TestCase):
     def test_online_score_request(self, request, expected):
         req_obj = api.OnlineScoreRequest(request)
         msg, valid = req_obj.validate()
-        self.assertEquals(valid, expected, help_msg(exp=expected, **request))
+        self.assertEqual(valid, expected, help_msg(exp=expected, **request))
 
     @cases([
         {"phone": "qdads", "email": "bb@aa", "gender": 0,
@@ -318,7 +318,7 @@ class TestRequestsSuite(unittest.TestCase):
     def test_clients_interests_req(self, request, expected):
         req_obj = api.ClientsInterestsRequest(request)
         msg, valid = req_obj.validate()
-        self.assertEquals(valid, expected, help_msg(exp=expected, **request))
+        self.assertEqual(valid, expected, help_msg(exp=expected, **request))
 
     @cases([
         [1, 2, 3],
@@ -327,7 +327,7 @@ class TestRequestsSuite(unittest.TestCase):
     def test_nclients(self, ids):
         request = {"client_ids": ids}
         req_obj = api.ClientsInterestsRequest(request)
-        self.assertEquals(req_obj.nclients, len(ids))
+        self.assertEqual(req_obj.nclients, len(ids))
 
 
 if __name__ == '__main__':
