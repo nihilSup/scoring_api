@@ -110,14 +110,14 @@ class Request(abc.ABC):
     def validate(self):
         invalid_fields = []
         for attr_name, attr_val in self.fields:
-            msg, valid = attr_val.validate(self)
-            if not valid:
+            try:
+                attr_val.validate(self)
+            except Exception as e:
                 invalid_fields.append(attr_name)
         if invalid_fields:
-            msg = "invalid fields: " + ', '.join(invalid_fields)
-            return msg, INVALID_REQUEST
+            raise Exception("invalid fields: " + ', '.join(invalid_fields))
         else:
-            return "", OK
+            return
 
     def as_dict(self):
         return dict((attr_name, getattr(self, attr_name))
@@ -129,7 +129,7 @@ class ClientsInterestsRequest(Request):
     date = DateField(required=False, nullable=True, fmt='%d.%m.%Y')
 
     def validate(self):
-        return super().validate()
+        super().validate()
 
     @property
     def nclients(self):
@@ -146,14 +146,12 @@ class OnlineScoreRequest(Request):
     gender = GenderField(range_=[0, 1, 2], required=False, nullable=True)
 
     def validate(self):
-        msg, status = super().validate()
-        if status != OK:
-            return msg, status
+        super().validate()
         if (self.phone and self.email or self.first_name and self.last_name or
            self.birthday and self.gender is not None):
-            return "", OK
+            return
         else:
-            return "There is no available field pairs", INVALID_REQUEST
+            raise Exception("There is no available field pairs")
 
     @property
     def has(self):
@@ -173,7 +171,7 @@ class MethodRequest(Request):
         return self.login == ADMIN_LOGIN
 
     def validate(self):
-        return super().validate()
+        super().validate()
 
 
 def digestize(request):
@@ -193,9 +191,10 @@ def check_auth(request):
 def method_handler(request, ctx, store):
     req_body = request['body']
     method_request = MethodRequest(req_body)
-    msg, code = method_request.validate()
-    if code != OK:
-        return msg, code
+    try:
+        method_request.validate()
+    except Exception as e:
+        return str(e), INVALID_REQUEST
     if not check_auth(method_request):
         return ERRORS[FORBIDDEN], FORBIDDEN
     if method_request.method == 'online_score':
@@ -208,9 +207,10 @@ def method_handler(request, ctx, store):
 
 def handle_online_score(method_request, ctx, store):
     conc_method_req = OnlineScoreRequest(method_request.arguments)
-    msg, code = conc_method_req.validate()
-    if code != OK:
-        return msg, code
+    try:
+        conc_method_req.validate()
+    except Exception as e:
+        return str(e), INVALID_REQUEST
     ctx['has'] = conc_method_req.has
     if method_request.is_admin:
         return dict(score=42), OK
@@ -221,9 +221,10 @@ def handle_online_score(method_request, ctx, store):
 
 def handle_clients_interests(method_request, ctx, store):
     conc_method_req = ClientsInterestsRequest(method_request.arguments)
-    msg, code = conc_method_req.validate()
-    if code != OK:
-        return msg, code
+    try:
+        conc_method_req.validate()
+    except Exception as e:
+        return str(e), INVALID_REQUEST
     ctx['nclients'] = conc_method_req.nclients
     response = {cid: scoring.get_interests(store, cid)
                 for cid in conc_method_req.client_ids}

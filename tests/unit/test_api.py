@@ -20,6 +20,15 @@ def help_msg(**kwargs):
     return str(kwargs)
 
 
+def validate_adapter(meth, obj):
+    try:
+        meth(obj)
+    except Exception as e:
+        return False, str(e)
+    else:
+        return True, None
+
+
 class TestCharField(unittest.TestCase):
     @cases([
         ('abcde', True),
@@ -37,7 +46,7 @@ class TestCharField(unittest.TestCase):
         c = C()
         c.char_field = val
         self.assertEqual(c.char_field, val)
-        msg, is_valid = C.char_field.validate(c)
+        is_valid, msg = validate_adapter(C.char_field.validate, c)
         self.assertEqual(is_valid, expected, help_msg(val=val, exp=expected,
                                                       msg=msg))
 
@@ -54,7 +63,7 @@ class TestArgumentsField(unittest.TestCase):
         c = C()
         c.field = val
         self.assertEqual(c.field, val)
-        msg, is_valid = C.field.validate(c)
+        is_valid, msg = validate_adapter(C.field.validate, c)
         self.assertEqual(is_valid, expected, help_msg(val=val, exp=expected,
                                                       msg=msg))
 
@@ -78,8 +87,7 @@ class TestEmailField(unittest.TestCase):
         c = C()
         c.email_field = val
         self.assertEqual(c.email_field, val)
-        msg, is_valid = C.email_field.validate(c)
-        # help_str = "val: {}, expected: {}".format(val, expected)
+        is_valid, msg = validate_adapter(C.email_field.validate, c)
         self.assertEqual(is_valid, expected, help_msg(val=val, exp=expected,
                                                       msg=msg))
 
@@ -97,7 +105,7 @@ class TestPhoneField(unittest.TestCase):
         c = C()
         c.field = val
         self.assertEqual(c.field, val)
-        msg, is_valid = C.field.validate(c)
+        is_valid, msg = validate_adapter(C.field.validate, c)
         self.assertEqual(is_valid, expected, help_msg(val=val, exp=expected,
                                                       msg=msg))
 
@@ -117,7 +125,7 @@ class TestDateField(unittest.TestCase):
         c = C()
         c.field = val
         self.assertEqual(c.field, val)
-        msg, is_valid = C.field.validate(c)
+        is_valid, msg = validate_adapter(C.field.validate, c)
         self.assertEqual(is_valid, expected, help_msg(val=val, exp=expected,
                                                       msg=msg))
 
@@ -141,7 +149,7 @@ class TestDateField(unittest.TestCase):
                                   nullable=False)
         c = C()
         c.field = val
-        msg, is_valid = C.field.validate(c)
+        is_valid, msg = validate_adapter(C.field.validate, c)
         self.assertEqual(is_valid, False, help_msg(val=val, exp=False,
                                                    msg=msg))
 
@@ -161,7 +169,7 @@ class TestBirthDayField(unittest.TestCase):
         c = C()
         c.field = val
         self.assertEqual(c.field, val)
-        msg, is_valid = C.field.validate(c)
+        is_valid, msg = validate_adapter(C.field.validate, c)
         self.assertEqual(is_valid, expected, help_msg(val=val, exp=expected,
                                                       msg=msg))
 
@@ -193,7 +201,7 @@ class TestGenderField(unittest.TestCase):
         c = C()
         c.field = val
         self.assertEqual(c.field, val)
-        msg, is_valid = C.field.validate(c)
+        is_valid, msg = validate_adapter(C.field.validate, c)
         self.assertEqual(is_valid, expected, help_msg(val=val, exp=expected,
                                                       msg=msg))
 
@@ -214,21 +222,21 @@ class TestClientIDsField(unittest.TestCase):
         c = C()
         c.field = val
         self.assertEqual(c.field, val)
-        msg, is_valid = C.field.validate(c)
+        is_valid, msg = validate_adapter(C.field.validate, c)
         self.assertEqual(is_valid, expected, help_msg(val=val, exp=expected,
                                                       msg=msg))
 
 
 class TestRequest(unittest.TestCase):
     @cases([
-        (dict(char_field='aaaa', phone_field=12345), api.OK),
+        (dict(char_field='aaaa', phone_field=12345), True),
         (dict(char_field='', phone_field=12345, opt_char_field='a'),
-         api.INVALID_REQUEST),
+         False),
         (dict(char_field=1, phone_field=22345, opt_char_field='a'),
-         api.INVALID_REQUEST),
-        (dict(phone_field=12345, opt_char_field='a'), api.INVALID_REQUEST),
-        (dict(), api.INVALID_REQUEST),
-        (dict(char_field='', phone_field=-1), api.INVALID_REQUEST),
+         False),
+        (dict(phone_field=12345, opt_char_field='a'), False),
+        (dict(), False),
+        (dict(char_field='', phone_field=-1), False),
     ])
     def test_basic_cases(self, request, expected):
         class C(api.Request):
@@ -240,13 +248,13 @@ class TestRequest(unittest.TestCase):
             def validate(self):
                 return super().validate()
         c = C(request)
-        msg, is_valid = c.validate()
+        is_valid, msg = validate_adapter(C.validate, c)
         self.assertEqual(is_valid, expected, help_msg(**request))
 
     @cases([
-        ({}, api.OK),
-        (dict(char_field='aaaa', phone_field=12345), api.OK),
-        (dict(char_field='', phone_field=-1), api.INVALID_REQUEST),
+        ({}, True),
+        (dict(char_field='aaaa', phone_field=12345), True),
+        (dict(char_field='', phone_field=-1), False),
     ])
     def test_all_opt(self, request, expected):
         class C(api.Request):
@@ -258,45 +266,47 @@ class TestRequest(unittest.TestCase):
             def validate(self):
                 return super().validate()
         c = C(request)
-        msg, valid = c.validate()
-        self.assertEqual(valid, expected, msg)
+        is_valid, msg = validate_adapter(C.validate, c)
+        self.assertEqual(is_valid, expected, msg)
 
 
 class TestRequestsSuite(unittest.TestCase):
     @cases([
-        ({}, api.INVALID_REQUEST),
+        ({}, False),
         ({"account": "foo", "login": "bar", "method": "some", "token": "",
-         "arguments": {}}, api.OK),
+         "arguments": {}}, True),
         ({"login": "bar", "method": "some", "token": "",
-         "arguments": {}}, api.OK),
+         "arguments": {}}, True),
         ({"method": "some", "token": "",
-         "arguments": {}}, api.INVALID_REQUEST),
+         "arguments": {}}, False),
         ({"login": "", "method": "a", "token": "",
-         "arguments": {}}, api.OK),
+         "arguments": {}}, True),
         ({"login": None, "method": "a", "token": None,
-         "arguments": None}, api.OK),
+         "arguments": None}, True),
         ({"login": None, "method": "a", "token": 1,
-         "arguments": None}, api.INVALID_REQUEST),
+         "arguments": None}, False),
     ])
     def test_method_request(self, request, expected):
         meth_req_obj = api.MethodRequest(request)
-        msg, valid = meth_req_obj.validate()
-        self.assertEqual(valid, expected, help_msg(exp=expected, **request))
+        is_valid, msg = validate_adapter(api.MethodRequest.validate,
+                                         meth_req_obj)
+        self.assertEqual(is_valid, expected, help_msg(exp=expected, **request))
 
     @cases([
         ({"phone": "qdads", "email": "bb@aa", "gender": 0,
          "birthday": "01.01.2001", "first_name": "s", "last_name": 2},
-         api.INVALID_REQUEST),
+         False),
         ({"phone": "qdads", "gender": 0, "first_name": "s"},
-         api.INVALID_REQUEST),
-        ({}, api.INVALID_REQUEST),
+         False),
+        ({}, False),
         ({"phone": "77asdfghjkl", "email": "bb@aa"},
-         api.OK),
+         True),
     ])
     def test_online_score_request(self, request, expected):
         req_obj = api.OnlineScoreRequest(request)
-        msg, valid = req_obj.validate()
-        self.assertEqual(valid, expected, help_msg(exp=expected, **request))
+        is_valid, msg = validate_adapter(api.OnlineScoreRequest.validate,
+                                         req_obj)
+        self.assertEqual(is_valid, expected, help_msg(exp=expected, **request))
 
     @cases([
         {"phone": "qdads", "email": "bb@aa", "gender": 0,
@@ -309,16 +319,17 @@ class TestRequestsSuite(unittest.TestCase):
         self.assertEqual(sorted(req_obj.has), sorted(request.keys()))
 
     @cases([
-        ({}, api.INVALID_REQUEST),
-        ({"client_ids": []}, api.INVALID_REQUEST),
-        ({"client_ids": ['1', '1']}, api.INVALID_REQUEST),
-        ({"client_ids": [1]}, api.OK),
-        ({"client_ids": [1, 2]}, api.OK),
+        ({}, False),
+        ({"client_ids": []}, False),
+        ({"client_ids": ['1', '1']}, False),
+        ({"client_ids": [1]}, True),
+        ({"client_ids": [1, 2]}, True),
     ])
     def test_clients_interests_req(self, request, expected):
         req_obj = api.ClientsInterestsRequest(request)
-        msg, valid = req_obj.validate()
-        self.assertEqual(valid, expected, help_msg(exp=expected, **request))
+        is_valid, msg = validate_adapter(api.ClientsInterestsRequest.validate,
+                                         req_obj)
+        self.assertEqual(is_valid, expected, help_msg(exp=expected, **request))
 
     @cases([
         [1, 2, 3],

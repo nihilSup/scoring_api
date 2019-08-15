@@ -41,11 +41,9 @@ class ValidatedField(Field):
 
     def validate(self, obj):
         val = getattr(obj, self.name, self.default)
-        try:
-            res = all(validator(val) for validator in self.validators)
-        except (ValueError, TypeError) as e:
-            return str(e), False
-        return "OK" if res else "Failed", res
+        for validator in self.validators:
+            validator(val)
+        return None
 
 
 class NullableField(ValidatedField):
@@ -56,11 +54,11 @@ class NullableField(ValidatedField):
     def validate(self, obj):
         val = getattr(obj, self.name, self.default)
         if self.nullable and not val:
-            return "OK", True
+            return
         elif not self.nullable and not val and val != 0:
-            return "None value in not nullable field", False
+            raise ValueError("None value in not nullable field")
         else:
-            return super().validate(obj)
+            super().validate(obj)
 
 
 class RequiredField(ValidatedField):
@@ -73,11 +71,11 @@ class RequiredField(ValidatedField):
 
     def validate(self, obj):
         if not hasattr(obj, self.name) and self.required:
-            return "Missing required field", False
+            raise ValueError("Missing required field")
         elif not hasattr(obj, self.name) and not self.required:
-            return "OK", True
+            return
         else:
-            return super().validate(obj)
+            super().validate(obj)
 
 
 class TypedField(ValidatedField):
@@ -89,7 +87,7 @@ class TypedField(ValidatedField):
     def validate(self, obj):
         val = getattr(obj, self.name, self.default)
         if not isinstance(val, self.type_):
-            return ("Incorrect type, expected any of %s" % str(self.type_),
-                    False)
+            raise TypeError("Incorrect type, expected any of %s"
+                            % str(self.type_))
         else:
-            return super().validate(obj)
+            super().validate(obj)

@@ -27,7 +27,7 @@ class TestValidatedField(unittest.TestCase):
         c = C()
         c.val_field = 5
         self.assertEqual(c.val_field, 5)
-        self.assertEqual(C.val_field.validate(c), ("OK", True))
+        C.val_field.validate(c)
 
     def test_valid_validator(self):
         class C(object):
@@ -35,7 +35,7 @@ class TestValidatedField(unittest.TestCase):
         c = C()
         c.val_field = 5
         self.assertEqual(c.val_field, 5)
-        self.assertEqual(C.val_field.validate(c), ("OK", True))
+        C.val_field.validate(c)
 
     def test_validator_error(self):
         class C(object):
@@ -43,7 +43,8 @@ class TestValidatedField(unittest.TestCase):
         c = C()
         c.val_field = '5'
         self.assertEqual(c.val_field, '5')
-        self.assertEqual(C.val_field.validate(c), ("Must be int", False))
+        with self.assertRaises(ValueError):
+            C.val_field.validate(c)
 
 
 class TestNullableField(unittest.TestCase):
@@ -61,7 +62,7 @@ class TestNullableField(unittest.TestCase):
         c = C()
         c.val_field = None
         self.assertIsNone(c.val_field)
-        self.assertEqual(C.val_field.validate(c), ("OK", True))
+        C.val_field.validate(c)
 
     def test_none_value_in_not_nullable(self):
         class C(object):
@@ -70,8 +71,8 @@ class TestNullableField(unittest.TestCase):
         c = C()
         c.val_field = None
         self.assertIsNone(c.val_field)
-        self.assertEqual(C.val_field.validate(c),
-                         ("None value in not nullable field", False))
+        with self.assertRaises(ValueError):
+            C.val_field.validate(c)
 
     def test_regular_value(self):
         class C(object):
@@ -80,14 +81,15 @@ class TestNullableField(unittest.TestCase):
         c = C()
         c.val_field = '5'
         self.assertEqual(c.val_field, '5')
-        self.assertEqual(C.val_field.validate(c), ("Must be int", False))
+        with self.assertRaises(ValueError):
+            C.val_field.validate(c)
 
 
 class TestRequiredField(unittest.TestCase):
     def setUp(self):
         def validate_int(val):
             if not isinstance(val, int):
-                raise ValueError("Must be int")
+                raise TypeError("Must be int")
             return True
         self.validate_int = validate_int
 
@@ -96,16 +98,15 @@ class TestRequiredField(unittest.TestCase):
             val_field = field.RequiredField(required=True,
                                             validators=[self.validate_int])
         c = C()
-        self.assertEqual(C.val_field.validate(c),
-                         ("Missing required field", False))
+        with self.assertRaises(ValueError):
+            C.val_field.validate(c)
 
     def test_empty_and_not_req(self):
         class C(object):
             val_field = field.RequiredField(required=False,
                                             validators=[self.validate_int])
         c = C()
-        self.assertEqual(C.val_field.validate(c),
-                         ("OK", True))
+        C.val_field.validate(c)
 
     def test_val_and_req(self):
         class C(object):
@@ -114,7 +115,8 @@ class TestRequiredField(unittest.TestCase):
         c = C()
         c.val_field = '5'
         self.assertEqual(c.val_field, '5')
-        self.assertEqual(C.val_field.validate(c), ("Must be int", False))
+        with self.assertRaises(TypeError):
+            C.val_field.validate(c)
 
 
 class TestTypedField(unittest.TestCase):
@@ -124,35 +126,33 @@ class TestTypedField(unittest.TestCase):
         c = C()
         c.str_field = 'some'
         self.assertEqual(c.str_field, 'some')
-        self.assertEqual(C.str_field.validate(c), ("OK", True))
+        C.str_field.validate(c)
 
     def test_mixed_field(self):
         class C(object):
             mixed_field = field.TypedField(type_=(list, int))
         c = C()
         c.mixed_field = ['a']
-        self.assertEqual(C.mixed_field.validate(c), ("OK", True))
+        C.mixed_field.validate(c)
         c.mixed_field = 5
         self.assertEqual(c.mixed_field, 5)
-        self.assertEqual(C.mixed_field.validate(c), ("OK", True))
+        C.mixed_field.validate(c)
 
     def test_invalid_str_field(self):
         class C(object):
             str_field = field.TypedField(type_=str)
         c = C()
         c.str_field = 5
-        msg, is_valid = C.str_field.validate(c)
-        self.assertEqual((is_valid, msg.startswith('Incorrect type')),
-                         (False, True))
+        with self.assertRaises(TypeError):
+            C.str_field.validate(c)
 
     def test_invalid_mixed_field(self):
         class C(object):
             mixed_field = field.TypedField(type_=(list, int))
         c = C()
         c.mixed_field = 'some'
-        msg, is_valid = C.mixed_field.validate(c)
-        self.assertEqual((is_valid, msg.startswith('Incorrect type')),
-                         (False, True))
+        with self.assertRaises(TypeError):
+            C.mixed_field.validate(c)
 
 
 if __name__ == '__main__':
