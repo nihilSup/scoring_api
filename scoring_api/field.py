@@ -25,16 +25,6 @@ class Field(object):
         self.name = '_' + name
 
 
-class NamedDescrMeta(type):
-    """Metaclass companion for descriptor like object to handle descriptor
-    value names in < python 3.6"""
-    def __init__(cls, name, bases, attrs):
-        super().__init__(name, bases, attrs)
-        for attr_name, attr_val in attrs:
-            if isinstance(attr_val, Field):
-                attr_val.__set_name__(cls, attr_name)
-
-
 class ValidatedField(Field):
     """
     Field descriptor with set validators.
