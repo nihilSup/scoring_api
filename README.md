@@ -14,7 +14,7 @@ There are two flagsFlag `-p, --port` to specify port for web server and `-l, --l
 # Warning
 
 * To work with clients_interests method you should start redis server with some content
-* Desriptor fields will only work with python 3.6. For previous version one should use metaclass to handle descriptor names:
+* Desriptor fields will only work with python 3.6+. For previous version one should use metaclass to handle descriptor names:
 
     ```python
     class NamedDescrMeta(type):
