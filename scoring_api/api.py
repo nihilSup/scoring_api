@@ -100,16 +100,16 @@ class Request(abc.ABC):
         self.valid = True
         for attr_name, attr_value in request.items():
             setattr(self, attr_name, attr_value)
-
-    def fields(self):
-        for attr_name, attr_val in self.__class__.__dict__.items():
-            if isinstance(attr_val, field.ValidatedField):
-                yield attr_name, attr_val
+        self.fields = [
+            (attr_name, attr_val)
+            for attr_name, attr_val in self.__class__.__dict__.items()
+            if isinstance(attr_val, field.ValidatedField)
+        ]
 
     @abc.abstractmethod
     def validate(self):
         invalid_fields = []
-        for attr_name, attr_val in self.fields():
+        for attr_name, attr_val in self.fields:
             msg, valid = attr_val.validate(self)
             if not valid:
                 invalid_fields.append(attr_name)
@@ -121,7 +121,7 @@ class Request(abc.ABC):
 
     def as_dict(self):
         return dict((attr_name, getattr(self, attr_name))
-                    for attr_name, attr_val in self.fields())
+                    for attr_name, attr_val in self.fields)
 
 
 class ClientsInterestsRequest(Request):
@@ -157,7 +157,7 @@ class OnlineScoreRequest(Request):
 
     @property
     def has(self):
-        return [field_name for field_name, field in self.fields()
+        return [field_name for field_name, field in self.fields
                 if getattr(self, field_name) is not None]
 
 
