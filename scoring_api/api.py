@@ -199,27 +199,35 @@ def method_handler(request, ctx, store):
     if not check_auth(method_request):
         return ERRORS[FORBIDDEN], FORBIDDEN
     if method_request.method == 'online_score':
-        conc_method_req = OnlineScoreRequest(method_request.arguments)
-        msg, code = conc_method_req.validate()
-        if code != OK:
-            return msg, code
-        ctx['has'] = conc_method_req.has
-        if method_request.is_admin:
-            return dict(score=42), OK
-        else:
-            score = scoring.get_score(store, **conc_method_req.as_dict())
-            return dict(score=score), OK
+        return handle_online_score(method_request, ctx, store)
     elif method_request.method == 'clients_interests':
-        conc_method_req = ClientsInterestsRequest(method_request.arguments)
-        msg, code = conc_method_req.validate()
-        if code != OK:
-            return msg, code
-        ctx['nclients'] = conc_method_req.nclients
-        response = {cid: scoring.get_interests(store, cid)
-                    for cid in conc_method_req.client_ids}
-        return response, OK
+        return handle_clients_interests(method_request, ctx, store)
     else:
         return ERRORS[NOT_FOUND], "Unknown method - %s" % method_request.method
+
+
+def handle_online_score(method_request, ctx, store):
+    conc_method_req = OnlineScoreRequest(method_request.arguments)
+    msg, code = conc_method_req.validate()
+    if code != OK:
+        return msg, code
+    ctx['has'] = conc_method_req.has
+    if method_request.is_admin:
+        return dict(score=42), OK
+    else:
+        score = scoring.get_score(store, **conc_method_req.as_dict())
+        return dict(score=score), OK
+
+
+def handle_clients_interests(method_request, ctx, store):
+    conc_method_req = ClientsInterestsRequest(method_request.arguments)
+    msg, code = conc_method_req.validate()
+    if code != OK:
+        return msg, code
+    ctx['nclients'] = conc_method_req.nclients
+    response = {cid: scoring.get_interests(store, cid)
+                for cid in conc_method_req.client_ids}
+    return response, OK
 
 
 class MainHTTPHandler(BaseHTTPRequestHandler):
