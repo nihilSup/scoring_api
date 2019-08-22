@@ -336,13 +336,13 @@ class TestRequest(unittest.TestCase):
 class TestRequestsSuite(unittest.TestCase):
     @cases([
         {"account": "foo", "login": "bar", "method": "some", "token": "",
-         "arguments": {}}, True,
+         "arguments": {}},
         {"login": "bar", "method": "some", "token": "",
-         "arguments": {}}, True,
+         "arguments": {}},
         {"login": "", "method": "a", "token": "",
-         "arguments": {}}, True,
+         "arguments": {}},
         {"login": None, "method": "a", "token": None,
-         "arguments": None}, True,
+         "arguments": None},
     ])
     def test_method_request(self, request):
         meth_req_obj = api.MethodRequest(request)
