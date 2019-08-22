@@ -2,17 +2,7 @@ import unittest
 import functools
 
 from scoring_api import scoring
-
-
-def cases(cases):
-    def wrapper(f):
-        @functools.wraps(f)
-        def inner_wrapper(*args):
-            for case in cases:
-                case = case if isinstance(case, tuple) else (case, )
-                f(*args, *case)
-        return inner_wrapper
-    return wrapper
+from tests.utils import cases
 
 
 class TestGetScore(unittest.TestCase):

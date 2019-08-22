@@ -2,17 +2,7 @@ import unittest
 import functools
 
 from scoring_api import api
-
-
-def cases(cases):
-    def wrapper(f):
-        @functools.wraps(f)
-        def inner_wrapper(*args):
-            for case in cases:
-                case = case if isinstance(case, tuple) else (case, )
-                f(*args, *case)
-        return inner_wrapper
-    return wrapper
+from tests.utils import cases
 
 
 def help_msg(**kwargs):
