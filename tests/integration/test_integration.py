@@ -1,38 +1,31 @@
 import unittest
 import threading
-from http.server import HTTPServer
 import requests
 import functools
+import os
+from http.server import HTTPServer
 
 import fakeredis
 
 from scoring_api import api, store
-
-
-def cases(cases):
-    def wrapper(f):
-        @functools.wraps(f)
-        def inner_wrapper(*args):
-            for case in cases:
-                case = case if isinstance(case, tuple) else (case, )
-                f(*args, *case)
-        return inner_wrapper
-    return wrapper
+from tests.utils import cases
 
 
 class TestApp(unittest.TestCase):
     def setUp(self):
         self.host = 'localhost'
         self.port = 8080
-        api.MainHTTPHandler.store = store.RedisStore(
-            attempts=2, timeout=1,
-            client_builder=lambda: fakeredis.FakeStrictRedis()
-        )
-        server = HTTPServer((self.host, self.port), api.MainHTTPHandler)
-        self.server = server
-        server_thread = threading.Thread(target=server.serve_forever)
-        server_thread.setDaemon(True)
-        server_thread.start()
+        if 'REDIS_HOST' in os.environ and 'REDIS_PORT' in os.environ:
+            api.MainHTTPHandler.store = store.RedisStore(
+                host=os.environ['REDIS_HOST'], port=os.environ['REDIS_PORT'],
+                attempts=2, timeout=1)
+            server = HTTPServer((self.host, self.port), api.MainHTTPHandler)
+            self.server = server
+            server_thread = threading.Thread(target=server.serve_forever)
+            server_thread.setDaemon(True)
+            server_thread.start()
+        else:
+            self.skipTest("There are no redis env vars REDIS_HOST and REDIS_PORT")
 
     def tearDown(self):
         self.server.server_close()
